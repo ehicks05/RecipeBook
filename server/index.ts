@@ -1,58 +1,68 @@
-/* eslint-disable prettier/prettier */
-// import { PrismaClient } from '@prisma/client';
-import express from 'express';
-import prisma from './prismaClient';
-import logger from './config/logger';
-import cors from 'cors';
+import express from "express";
+import cors from "cors";
+import client from "./edgeDbClient";
+import e from "./dbschema/edgeql-js";
 
 const app = express();
 
-app.use(
-  cors({
-    origin: ["http://localhost:3000"],
-  })
-);
+app.use(cors());
 
-app.get('/api/recipes', async (req, res) => {
-    logger.info('Hell yea');
-    const allRecipes = await prisma.recipe.findMany({
-      include: {
-        author: true,
-        directions: true,
-        ingredients: true,
-        userFavorites: true,
-      },
-    });
-    res.json(allRecipes);
+app.get("/api/recipes", async (req, res) => {
+  const query = e.select(e.Recipe, (recipe) => ({
+    ...e.Recipe["*"],
+    test: e.count(recipe.ingredients),
+    author: { ...e.User["*"] },
+    ingredients: { ...e.Ingredient["*"] },
+    steps: { i: true, text: true },
+    order_by: {
+      expression: recipe.createdAt,
+      direction: e.DESC,
+      empty: e.EMPTY_LAST,
+    },
+  }));
+  const data = await query.run(client);
+
+  res.json(data);
 });
 
-app.get('/api/recipes/:recipeId', async (req, res) => {
-    const { recipeId} = req.params;
-    logger.info(`Fetching recipe for ${recipeId}`)
-    const recipe = await prisma.recipe.findUnique({
-        where: {
-            id: recipeId
-        }
-    })
-    res.json(recipe)
+app.get("/api/recipes/:recipeId", async (req, res) => {
+  const { recipeId } = req.params;
+  const query = e.select(e.Recipe, (recipe) => ({
+    filter: e.op(recipe.id, "=", e.uuid(recipeId)),
+
+    ...e.Recipe["*"],
+    test: e.count(recipe.ingredients),
+    author: { ...e.User["*"] },
+    ingredients: { ...e.Ingredient["*"] },
+    steps: { i: true, text: true },
+
+    order_by: {
+      expression: recipe.createdAt,
+      direction: e.DESC,
+      empty: e.EMPTY_LAST,
+    },
+  }));
+  const data = await query.run(client);
+  res.json(data);
 });
 
-app.put('/api/recipes/{recipeId}', (req, res) => {
-    res.json({ message: 'test'})
+app.put("/api/recipes/{recipeId}", (req, res) => {
+  res.json({ message: "test" });
 });
 
-app.post('/api/recipes', (req, res) => {
-    res.json({ message: 'test'})
+app.post("/api/recipes", (req, res) => {
+  res.json({ message: "test" });
 });
 
-app.get('/api/user/recipes', (req, res) => {
-    res.json({message: 'test'})
+app.get("/api/user/recipes", (req, res) => {
+  res.json({ message: "test" });
 });
 
-app.get('/api/user/favorites', (req, res) => {
-    res.json({message: 'test'})
+app.get("/api/user/favorites", (req, res) => {
+  res.json({ message: "test" });
 });
 
-app.listen(8989, () => {
-    console.log('Server started');
+const port = 8989;
+app.listen(port, () => {
+  console.log("Server started on port " + port);
 });
